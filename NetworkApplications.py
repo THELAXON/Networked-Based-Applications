@@ -120,20 +120,40 @@ class NetworkApplication:
 class ICMPPing(NetworkApplication):
 
     def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout):
-        # 1. Wait for the socket to receive a reply
-        # 2. Once received, record time of receipt, otherwise, handle a timeout
-        # 3. Compare the time of receipt to time of sending, producing the total network delay
-        # 4. Unpack the packet header for useful information, including the ID
-        # 5. Check that the ID matches between the request and reply
-        # 6. Return total network delay
-        pass
+        start_time = time.time()
+        icmpSocket.settimeout(timeout)
+        
+        try:
+            data, address = icmpSocket.recvfrom(1024)
+            end_time = time.time()
+            delay = end_time - start_time
+            
+            # Unpack the packet header for useful information
+            icmpHeader = data[20:28]
+            type, code, checksum, packet_ID, sequence = struct.unpack("bbHHh", icmpHeader)
+            
+            # Check that the ID matches between the request and reply
+            if packet_ID == ID:
+                return delay
+            else:
+                return None
+        except socket.timeout:
+            # Handle a timeout
+            return None
+    pass
 
     def sendOnePing(self, icmpSocket, destinationAddress, ID):
-        # 1. Build ICMP header
-        # 2. Checksum ICMP packet using given function
-        # 3. Insert checksum into packet
-        # 4. Send packet using socket
-        # 5. Record time of sending
+        header = struct.pack("bbHHh", 8, 0, 0, ID, 1)
+        payload = b"cunt"
+        packet = header + payload
+
+        # Compute the checksum
+        myChecksum = self.checksum(packet)
+        header = struct.pack("bbHHh", 8, 0, socket.htons(myChecksum), ID, 1)
+        packet = header + payload
+
+        # Send the packet
+        icmpSocket.sendto(packet, (destinationAddress, 1))
         pass
 
     def doOnePing(self, destinationAddress, timeout):
