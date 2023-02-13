@@ -140,7 +140,6 @@ class ICMPPing(NetworkApplication):
         except socket.timeout:
             # Handle a timeout
             return None
-    pass
 
     def sendOnePing(self, icmpSocket, destinationAddress, ID):
         header = struct.pack("bbHHh", 8, 0, 0, ID, 1)
@@ -154,23 +153,46 @@ class ICMPPing(NetworkApplication):
 
         # Send the packet
         icmpSocket.sendto(packet, (destinationAddress, 1))
-        pass
 
     def doOnePing(self, destinationAddress, timeout):
-        # 1. Create ICMP socket
-        # 2. Call sendOnePing function
-        # 3. Call receiveOnePing function
-        # 4. Close ICMP socket
-        # 5. Return total network delay
-        pass
+        # Create ICMP socket
+        icmp = socket.getprotobyname("icmp")
+        try:
+            icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
+        except socket.error as errorCode:
+            if errorCode.errno == 1:
+                # Operation not permitted - Add more information to the error message
+                raise socket.error("ICMP messages can only be sent from processes running as root.")
+            raise
+        
+        # Call sendOnePing function
+        self.sendOnePing(icmpSocket, destinationAddress, int(time.time()))
+        
+        # Call receiveOnePing function
+        delay = self.receiveOnePing(icmpSocket, destinationAddress, int(time.time()), timeout)
+        
+        # Close ICMP socket
+        icmpSocket.close()
+        
+        # Return total network delay
+        return delay
 
     def __init__(self, args):
         print('Ping to: %s...' % (args.hostname))
-        # 1. Look up hostname, resolving it to an IP address
-        # 2. Call doOnePing function, approximately every second
-        # 3. Print out the returned delay (and other relevant details) using the printOneResult method
-        self.printOneResult('1.1.1.1', 50, 20.0, 150) # Example use of printOneResult - complete as appropriate
-        # 4. Continue this process until stopped
+        destinationAddress = socket.gethostbyname(args.hostname)
+        timeout = args.timeout
+        
+        # Call doOnePing function, approximately every second
+        while True:
+            delay = self.doOnePing(destinationAddress, timeout)
+            
+            # Print out the returned delay (and other relevant details) using the printOneResult method
+            if delay is not None:
+                self.printOneResult(destinationAddress, int(time.time()), delay, 150)
+            
+            # Continue this process until stopped
+            time.sleep(1)
+    
 
 
 class Traceroute(NetworkApplication):
