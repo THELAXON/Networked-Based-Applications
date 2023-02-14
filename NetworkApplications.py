@@ -65,30 +65,22 @@ def setupArgumentParser() -> argparse.Namespace:
 
 class NetworkApplication:
 
-    def checksum(self, dataToChecksum: str) -> str:
-        csum = 0
-        countTo = (len(dataToChecksum) // 2) * 2
-        count = 0
 
-        while count < countTo:
-            thisVal = dataToChecksum[count+1] * 256 + dataToChecksum[count]
-            csum = csum + thisVal
-            csum = csum & 0xffffffff
-            count = count + 2
+    def checksum(self,data):
+            n = len(data)
+            m = n % 2
+            sum = 0
+            for i in range(0, n - m, 2):
+                sum += (data[i]) + ((data[i + 1]) << 8)
+            if m:
+                sum += (data[-1])
+            sum = (sum >> 16) + (sum & 0xffff)
+            sum = sum + (sum >> 16)
+            answer = ~sum
+            answer = answer & 0xffff
+            answer = answer >> 8 | (answer << 8 & 0xff00)
+            return answer
 
-        if countTo < len(dataToChecksum):
-            csum = csum + dataToChecksum[len(dataToChecksum) - 1]
-            csum = csum & 0xffffffff
-
-        csum = (csum >> 16) + (csum & 0xffff)
-        csum = csum + (csum >> 16)
-        answer = ~csum
-        answer = answer & 0xffff
-        answer = answer >> 8 | (answer << 8 & 0xff00)
-
-        answer = socket.htons(answer)
-
-        return answer
 
     def printOneResult(self, destinationAddress: str, packetLength: int, time: float, ttl: int, destinationHostname=''):
         if destinationHostname:
@@ -125,30 +117,33 @@ class ICMPPing(NetworkApplication):
         
         try:
             data, address = icmpSocket.recvfrom(1024)
+
             end_time = time.time()
             delay = end_time - start_time
             
             # Unpack the packet header for useful information
             icmpHeader = data[20:28]
-            type, code, checksum, packet_ID, sequence = struct.unpack("bbHHh", icmpHeader)
+            type, code, checksum, packet_ID, sequence = struct.unpack("!bbHHh", icmpHeader)
             
             # Check that the ID matches between the request and reply
-            if packet_ID == ID:
-                return delay
+            if packet_ID == 69:
+                 return delay
             else:
-                return None
+                 print("wrong packet id")
+                 return None
         except socket.timeout:
             # Handle a timeout
             return None
 
     def sendOnePing(self, icmpSocket, destinationAddress, ID):
-        header = struct.pack("bbHHh", 8, 0, 0, ID, 1)
-        payload = b"cunt"
+        header = struct.pack("!bbHHh", 8, 0, 0, 69, 1)
+        payload = b"SCC203"
         packet = header + payload
 
         # Compute the checksum
         myChecksum = self.checksum(packet)
-        header = struct.pack("bbHHh", 8, 0, socket.htons(myChecksum), ID, 1)
+        print("send")
+        header = struct.pack("!bbHHh", 8, 0, myChecksum, 69, 1)
         packet = header + payload
 
         # Send the packet
@@ -185,6 +180,7 @@ class ICMPPing(NetworkApplication):
         # Call doOnePing function, approximately every second
         while True:
             delay = self.doOnePing(destinationAddress, timeout)
+            print(delay)
             
             # Print out the returned delay (and other relevant details) using the printOneResult method
             if delay is not None:
