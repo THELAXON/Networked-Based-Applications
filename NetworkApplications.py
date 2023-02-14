@@ -143,10 +143,12 @@ class ICMPPing(NetworkApplication):
         except socket.timeout:
             # Handle a timeout
             return None
+    
+    
 
     def sendOnePing(self, icmpSocket, destinationAddress, ID):
         header = struct.pack("bbHHh", 8, 0, 0, ID, 1)
-        payload = b"SCC203"
+        payload = b"abcdefghijklmnopqrstuvwxyz"
         packet = header + payload
 
         # Compute the checksum
@@ -155,7 +157,15 @@ class ICMPPing(NetworkApplication):
         packet = header + payload
 
         # Send the packet
+        ttl = struct.pack('I', 64)
+        icmpSocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
         icmpSocket.sendto(packet, (destinationAddress, 1))
+
+        # Return the size of the packet and the TTL used
+        packetSize = len(packet)
+        ttlUsed = struct.unpack('I', ttl)[0]
+        return packetSize, ttlUsed
+
 
     def doOnePing(self, destinationAddress, timeout):
         # Create ICMP socket
@@ -167,34 +177,33 @@ class ICMPPing(NetworkApplication):
                 # Operation not permitted - Add more information to the error message
                 raise socket.error("ICMP messages can only be sent from processes running as root.")
             raise
-
-        
-        
         # Call sendOnePing function
-        self.sendOnePing(icmpSocket, destinationAddress, 1)
-        
+
+        packetSize, ttlUsed = self.sendOnePing(icmpSocket, destinationAddress, 1)
+
         # Call receiveOnePing function
         delay = self.receiveOnePing(icmpSocket, destinationAddress, 1, timeout)
-        
+
         # Close ICMP socket
         icmpSocket.close()
-        
-        # Return total network delay
-        return delay
+
+        # Return total network delay, packet size and TTL used
+        return delay, packetSize, ttlUsed
+
 
     def __init__(self, args):
         print('Ping to: %s...' % (args.hostname))
         destinationAddress = socket.gethostbyname(args.hostname)
         timeout = args.timeout
-        
+
         # Call doOnePing function, approximately every second
         while True:
-            delay = self.doOnePing(destinationAddress, timeout)
-            
+            delay, packetSize, ttlUsed = self.doOnePing(destinationAddress, timeout)
+
             # Print out the returned delay (and other relevant details) using the printOneResult method
             if delay is not None:
-                self.printOneResult(destinationAddress,50, delay * 1000, 150)
-            
+                self.printOneResult(destinationAddress, packetSize, delay * 1000, ttlUsed)
+
             # Continue this process until stopped
             time.sleep(1)
     
