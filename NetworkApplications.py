@@ -206,14 +206,132 @@ class ICMPPing(NetworkApplication):
 
             # Continue this process until stopped
             time.sleep(1)
-    
-
-
+            
 class Traceroute(NetworkApplication):
+    # def receiveOnePing(self, icmpSocket, timeout, ttl):
+    #     start_time = time.time()
+    #     icmpSocket.settimeout(timeout)
+        
+    #     try:
+    #         data, address = icmpSocket.recvfrom(1024)
+    #         print(f"Received {len(data)} bytes from {address}")
+
+    #         end_time = time.time()
+    #         delay = end_time - start_time
+
+    #         # Unpack the packet header for useful information
+    #         icmpHeader = data[20:28]
+    #         type, code, checksum, packet_ID, sequence = struct.unpack("bbHHh", icmpHeader)
+
+    #         # Check that the ID matches between the request and reply
+    #         if packet_ID == self.ID:
+    #             return delay, address[0]
+    #         else:
+    #             return None
+    #     except socket.timeout:
+    #         # Handle a timeout
+    #         return None
+    #     except Exception as e:
+    #         print(f"Error receiving packet: {e}")
+    #         return None
+
+    def receiveOnePing(self, icmpSocket, timeout, ttl):
+        start_time = time.time()
+        icmpSocket.settimeout(timeout)
+        
+        try:
+            data, address = icmpSocket.recvfrom(1024)
+            print(f"Received {len(data)} bytes from {address}")
+
+            end_time = time.time()
+            delay = end_time - start_time
+
+            # Unpack the packet header for useful information
+            icmpHeader = data[20:28]
+            type, code, checksum, packet_ID, sequence = struct.unpack("bbHHh", icmpHeader)
+
+            # Check that the ID and sequence number match between the request and reply
+            if packet_ID == self.ID and sequence == ttl:
+                return delay, address[0]
+            else:
+                return None, None
+        except socket.timeout:
+            # Handle a timeout
+            return None, None
+
+
+
+    def sendOnePing(self, icmpSocket, dest_addr, ttl):
+        header = struct.pack("bbHHh", 8, 0, 0, self.ID, 1)
+        payload = b"abcdefghijklmnopqrstuvwxyz"
+        packet = header + payload
+
+        # Set the TTL
+        ttl = struct.pack('I', ttl)
+        icmpSocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
+
+        # Compute the checksum
+        myChecksum = self.checksum(packet)
+        header = struct.pack("bbHHh", 8, 0, myChecksum, self.ID, 1)
+        packet = header + payload
+
+        # Send the packet
+        icmpSocket.sendto(packet, (dest_addr, 1))
+
+        # Return the size of the packet and the TTL used
+        packetSize = len(packet)
+        ttlUsed = struct.unpack('I', ttl)[0]
+        return packetSize, ttlUsed
+
+
+    def doOneTrace(self, dest_name, timeout, ttl):
+        dest_addr = socket.gethostbyname(dest_name)
+
+        # Create ICMP socket
+        icmp = socket.getprotobyname("icmp")
+        try:
+            icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
+        except socket.error as errorCode:
+            if errorCode.errno == 1:
+                # Operation not permitted - Add more information to the error message
+                raise socket.error("ICMP messages can only be sent from processes running as root.")
+            raise
+
+        # Set the TTL for the socket
+        icmpSocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, struct.pack('I', ttl))
+
+        # Call sendOnePing function
+        packetSize, ttlUsed = self.sendOnePing(icmpSocket, dest_addr, ttl)
+        print("Packet size: ", packetSize)
+        print("TTL used: ", ttlUsed)
+
+        # Call receiveOnePing function
+        delay, address = self.receiveOnePing(icmpSocket, timeout, ttl)
+        print("Delay: ", delay)
+        print("Address: ", address)
+        # Close ICMP socket
+        icmpSocket.close()
+
+        return delay, address, packetSize, ttlUsed
+
 
     def __init__(self, args):
-        # Please ensure you print each result using the printOneResult method!
         print('Traceroute to: %s...' % (args.hostname))
+        self.ID = random.randint(0, 65535)
+        max_ttl = 64
+        timeout = args.timeout
+
+        # Perform traceroute for each TTL value
+        for ttl in range(1, max_ttl + 1):
+            print(f'{ttl}\t', end='', flush=True)
+            done = False
+            addresses = []
+            # for i in range(3):
+            delay, address, packetSize, ttlUsed = self.doOneTrace(args.hostname, timeout, ttl)
+
+            if delay is not None:
+                    print(f'{address} ({delay * 1000:.3f} ms)\t', end='', flush=True)
+
 
 class ParisTraceroute(NetworkApplication):
 
