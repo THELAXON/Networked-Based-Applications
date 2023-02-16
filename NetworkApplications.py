@@ -215,7 +215,7 @@ class Traceroute(NetworkApplication):
         
         try:
             data, address = icmpSocket.recvfrom(1024)
-            print(f"Received {len(data)} bytes from {address}")
+            # print(f"Received {len(data)} bytes from {address}")
 
             end_time = time.time()
             delay = end_time - start_time
@@ -278,13 +278,13 @@ class Traceroute(NetworkApplication):
 
         # Call sendOnePing function
         packetSize, ttlUsed = self.sendOnePing(icmpSocket, dest_addr, ttl)
-        print("Packet size: ", packetSize)
-        print("TTL used: ", ttlUsed)
+        # print("Packet size: ", packetSize)
+        # print("TTL used: ", ttlUsed)
 
         # Call receiveOnePing function
         delay, address = self.receiveOnePing(icmpSocket, timeout, ttl)
-        print("Delay: ", delay)
-        print("Address: ", address)
+        # print("Delay: ", delay)
+        # print("Address: ", address)
         # Close ICMP socket
         icmpSocket.close()
 
@@ -302,11 +302,11 @@ class Traceroute(NetworkApplication):
             print(f'{ttl}\t', end='', flush=True)
             done = False
             addresses = []
-            # for i in range(3):
-            delay, address, packetSize, ttlUsed = self.doOneTrace(args.hostname, timeout, ttl)
+            for i in range(3):
+                delay, address, packetSize, ttlUsed = self.doOneTrace(args.hostname, timeout, ttl)
 
-            if delay is not None:
-                    print(f'{address} ({delay * 1000:.3f} ms)\t', end='', flush=True)
+                if delay is not None:
+                        print(f'{address} ({delay * 1000:.3f} ms)\t', end='', flush=True)
 
 
 class ParisTraceroute(NetworkApplication):
