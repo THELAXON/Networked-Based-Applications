@@ -208,32 +208,6 @@ class ICMPPing(NetworkApplication):
             time.sleep(1)
             
 class Traceroute(NetworkApplication):
-    # def receiveOnePing(self, icmpSocket, timeout, ttl):
-    #     start_time = time.time()
-    #     icmpSocket.settimeout(timeout)
-        
-    #     try:
-    #         data, address = icmpSocket.recvfrom(1024)
-    #         print(f"Received {len(data)} bytes from {address}")
-
-    #         end_time = time.time()
-    #         delay = end_time - start_time
-
-    #         # Unpack the packet header for useful information
-    #         icmpHeader = data[20:28]
-    #         type, code, checksum, packet_ID, sequence = struct.unpack("bbHHh", icmpHeader)
-
-    #         # Check that the ID matches between the request and reply
-    #         if packet_ID == self.ID:
-    #             return delay, address[0]
-    #         else:
-    #             return None
-    #     except socket.timeout:
-    #         # Handle a timeout
-    #         return None
-    #     except Exception as e:
-    #         print(f"Error receiving packet: {e}")
-    #         return None
 
     def receiveOnePing(self, icmpSocket, timeout, ttl):
         start_time = time.time()
@@ -253,11 +227,13 @@ class Traceroute(NetworkApplication):
             # Check that the ID and sequence number match between the request and reply
             if packet_ID == self.ID and sequence == ttl:
                 return delay, address[0]
-            else:
-                return None, None
+        
         except socket.timeout:
             # Handle a timeout
             return None, None
+        
+        # Return the delay and address even if packet_ID and sequence number do not match
+        return delay, address[0]
 
 
 
