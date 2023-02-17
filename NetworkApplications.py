@@ -290,11 +290,10 @@ class Traceroute(NetworkApplication):
 
         return delay, address, packetSize, ttlUsed
 
-
     def __init__(self, args):
-        print('Traceroute to: %s...' % (args.hostname))
+        print(f'Traceroute to: {args.hostname}...')
         self.ID = random.randint(0, 65535)
-        max_ttl = 64
+        max_ttl = 30
         timeout = args.timeout
 
         # Perform traceroute for each TTL value
@@ -302,12 +301,22 @@ class Traceroute(NetworkApplication):
             print(f'{ttl}\t', end='', flush=True)
             done = False
             addresses = []
+
+            # Perform three probes for each TTL value
             for i in range(3):
                 delay, address, packetSize, ttlUsed = self.doOneTrace(args.hostname, timeout, ttl)
-
                 if delay is not None:
-                        print(f'{address} ({delay * 1000:.3f} ms)\t', end='', flush=True)
+                    addresses.append(delay)
+                    if address == args.hostname:
+                        done = True
+                        break
 
+            # Print the IP address and delays for this TTL value
+            if addresses:
+                print(f'{address}\t' + '\t'.join([f'{d*1000:.3f} ms' for d in addresses]))
+            if done:
+                break
+                
 
 class ParisTraceroute(NetworkApplication):
 
