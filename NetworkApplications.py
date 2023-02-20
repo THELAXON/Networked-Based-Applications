@@ -415,55 +415,140 @@ class WebServer(NetworkApplication):
         finally:
             serverSocket.close()
 
+
 class Proxy(NetworkApplication):
-    
+
     def __init__(self, args):
         self.cache = {}
         self.server_address = ('', args.port)
-        self.web_server_address = ('localhost', 8080)
+        self.web_server_address = ('localhost', args.port)
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind(self.server_address)
         self.server_socket.listen(1)
-        
-        print('Web Proxy running on port %d' % args.port)
+
+        print('Starting proxy server on port %d' % args.port)
+        self.start()
 
     def handle_client(self, client_socket):
+        print('Handling client request')
         request = client_socket.recv(1024).decode('utf-8')
-        
+
         if not request:
             return
-        
+
+        print('Request received:')
+        print(request)
+
         # Check cache for response
         if request in self.cache:
-            response = self.cache[request]
             print('Serving response from cache')
+            response = self.cache[request]
         else:
+            print('Fetching response from web server')
             # Forward request to web server
             web_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            print('1')
             web_server_socket.connect(self.web_server_address)
+            print('2')
             web_server_socket.sendall(request.encode('utf-8'))
-            
+            print('3')
+
             # Read response from web server
-            response = web_server_socket.recv(1024)
-            
+            response = b''
+            while True:
+                data = web_server_socket.recv(4096)
+                if not data:
+                    break
+                response += data
+
+            print('Received response from web server:')
+            print(response)
+
             # Store response in cache
             self.cache[request] = response
             print('Storing response in cache')
-            
+
             # Close web server socket
             web_server_socket.close()
-        
+
+
         # Send response to client
         client_socket.sendall(response)
         client_socket.close()
 
     def start(self):
+        print('Proxy server started.')
         try:
             while True:
                 client_socket, client_address = self.server_socket.accept()
                 self.handle_client(client_socket)
         finally:
             self.server_socket.close()
+
+# class Proxy(NetworkApplication):
+    
+#     def __init__(self, args):
+#         self.cache = {}
+#         self.server_address = ('', args.port)
+#         self.web_server_address = ('localhost', args.port)
+#         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#         self.server_socket.bind(self.server_address)
+#         self.server_socket.listen(1)
+        
+#         print('Starting proxy server on port %d' % args.port)
+#         self.start()
+
+
+#     def handle_client(self, client_socket):
+#         print('Handling client request')
+#         request = client_socket.recv(1024).decode('utf-8')
+        
+#         if not request:
+#             return
+        
+#         print('Request received:')
+#         print(request)
+        
+#         # Check cache for response
+#         if request in self.cache:
+#             print('Serving response from cache')
+#             response = self.cache[request]
+#         else:
+#             print('Fetching response from web server')
+#             # Forward request to web server
+#             web_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#             print('1')
+#             web_server_socket.connect(self.web_server_address)
+#             print('2')
+#             web_server_socket.sendall(request.encode('utf-8'))
+#             print('3')
+            
+#             # Read response from web server
+#             response = web_server_socket.recv(4096)
+#             print('Received response from web server:')
+#             print(response)
+    
+#             # Store response in cache
+#             self.cache[request] = response
+#             print('Storing response in cache')
+            
+#             # Close web server socket
+#             web_server_socket.close()
+
+        
+#         # Send response to client
+#         client_socket.sendall(response)
+#         client_socket.close()
+
+#     def start(self):
+#         print('Proxy server started.')
+#         try:
+#             while True:
+#                 client_socket, client_address = self.server_socket.accept()
+#                 self.handle_client(client_socket)
+#         finally:
+#             self.server_socket.close()
+
 
 
 if __name__ == "__main__":
