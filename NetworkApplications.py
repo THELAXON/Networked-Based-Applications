@@ -427,41 +427,37 @@ class Proxy(NetworkApplication):
         print('Starting proxy server on port %d' % args.port)
         self.start()
 
+
     def handle_client(self, client_socket):
         print('Handling client request')
         request = client_socket.recv(1024).decode('utf-8')
+        hostname = self.parse_hostname(request)
+        self.web_server_address = (hostname, 80)
         
         if not request:
             return
-    
+        
         print('Request received:')
-        print(request)
+        # print(request)
         
         # Check cache for response
         if request in self.cache:
             print('Serving response from cache')
             response = self.cache[request]
         else:
-            # Parse hostname from client request
-            hostname = self.parse_hostname(request)
-            print('Parsed hostname: %s' % hostname)
-
-            if not hostname:
-                print('Could not parse hostname from request')
-                return
-            
-            # Update web server address to use parsed hostname
-            self.web_server_address = (hostname, args.port)
-            
+            print('Fetching response from web server')
             # Forward request to web server
             web_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            print('1')
             web_server_socket.connect(self.web_server_address)
+            print('2')
             web_server_socket.sendall(request.encode('utf-8'))
-
+            print('3')
+            
             # Read response from web server
-            response = web_server_socket.recv(15000)
+            response = web_server_socket.recv(8192)
             print('Received response from web server:')
-            print(response)
+            # print(response)
     
             # Store response in cache
             self.cache[request] = response
@@ -470,10 +466,10 @@ class Proxy(NetworkApplication):
             # Close web server socket
             web_server_socket.close()
 
+        
         # Send response to client
         client_socket.sendall(response)
         client_socket.close()
-        
     def parse_hostname(self, request):
         try:
             # Find start and end of Host header
@@ -494,6 +490,8 @@ class Proxy(NetworkApplication):
                 self.handle_client(client_socket)
         finally:
             self.server_socket.close()
+
+
 
 if __name__ == "__main__":
     args = setupArgumentParser()
