@@ -245,7 +245,7 @@ class Traceroute(NetworkApplication):
         packetSize = len(packet)
         ttlUsed = struct.unpack('I', ttl)[0]
         return packetSize, ttlUsed
-    
+
     def doOneTrace(self, dest_name, timeout, ttl):
         dest_addr = socket.gethostbyname(dest_name)
 
@@ -267,10 +267,16 @@ class Traceroute(NetworkApplication):
 
         # Call receiveOnePing function
         delay, address = self.receiveOnePing(icmpSocket, timeout, ttl)
+
         # Close ICMP socket
         icmpSocket.close()
 
-        return delay, address, packetSize, ttlUsed
+        # Check if the received packet has the same IP address as the destination
+        done = address == dest_addr
+
+        # Return the results
+        return delay, address, packetSize, ttlUsed, done
+
 
     def __init__(self, args):
         print(f'Traceroute to: {args.hostname}...')
@@ -280,22 +286,19 @@ class Traceroute(NetworkApplication):
         # Perform traceroute for each TTL value
         for ttl in range(1, max_ttl + 1):
             print(f'{ttl}\t', end='', flush=True)
-            done = False
             addresses = []
             # Perform three probes for each TTL value
             for i in range(3):
-                delay, address, packetSize, ttlUsed = self.doOneTrace(args.hostname, timeout, ttl)
+                delay, address, packetSize, ttlUsed, done = self.doOneTrace(args.hostname, timeout, ttl)
                 if delay is not None:
                     addresses.append(delay)
-                    if address == args.hostname:
-                            done = True
-                            return address, addresses
-            if done:
-                break
-            # Print the IP address and delays for this TTL value
+                if done:
+                    break
             if addresses:
                 print(f'{address}\t' + '\t'.join([f'{d*1000:.3f} ms' for d in addresses]))
-                
+            if done:
+                break
+        
 
 class ParisTraceroute(NetworkApplication):
     def receiveOnePing(self, icmpSocket, timeout, ttl):
