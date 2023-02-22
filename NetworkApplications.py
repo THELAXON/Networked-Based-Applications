@@ -245,7 +245,7 @@ class Traceroute(NetworkApplication):
         packetSize = len(packet)
         ttlUsed = struct.unpack('I', ttl)[0]
         return packetSize, ttlUsed
-    
+
     def doOneTrace(self, dest_name, timeout, ttl):
         dest_addr = socket.gethostbyname(dest_name)
 
@@ -267,35 +267,42 @@ class Traceroute(NetworkApplication):
 
         # Call receiveOnePing function
         delay, address = self.receiveOnePing(icmpSocket, timeout, ttl)
+
         # Close ICMP socket
         icmpSocket.close()
 
-        return delay, address, packetSize, ttlUsed
+        # Check if the received packet has the same IP address as the destination
+        done = address == dest_addr
+
+        # Return the results
+        return delay, address, packetSize, ttlUsed, done
+
 
     def __init__(self, args):
         print(f'Traceroute to: {args.hostname}...')
         self.ID = random.randint(0, 65535)
         max_ttl = 30
         timeout = args.timeout
+        delays = []
         # Perform traceroute for each TTL value
         for ttl in range(1, max_ttl + 1):
             print(f'{ttl}\t', end='', flush=True)
-            done = False
             addresses = []
             # Perform three probes for each TTL value
             for i in range(3):
-                delay, address, packetSize, ttlUsed = self.doOneTrace(args.hostname, timeout, ttl)
+                delay, address, packetSize, ttlUsed, done = self.doOneTrace(args.hostname, timeout, ttl)
                 if delay is not None:
-                    addresses.append(delay)
-                    if address == args.hostname:
-                            done = True
-                            return address, addresses
+                    addresses.append(delay*1000)
+            if addresses:
+                self.printMultipleResults(ttl, address, addresses)
+                delays.extend(addresses)
             if done:
                 break
-            # Print the IP address and delays for this TTL value
-            if addresses:
-                print(f'{address}\t' + '\t'.join([f'{d*1000:.3f} ms' for d in addresses]))
-                
+        packetLoss = (1 - (len(delays) / (max_ttl * 3))) * 100 if max_ttl * 3 > 0 else 0.0
+        minimumDelay = min(delays) if delays else 0.0
+        averageDelay = sum(delays) / len(delays) if delays else 0.0
+        maximumDelay = max(delays) if delays else 0.0
+        self.printAdditionalDetails(packetLoss, minimumDelay, averageDelay, maximumDelay)           
 
 class ParisTraceroute(NetworkApplication):
     def receiveOnePing(self, icmpSocket, timeout, ttl):
@@ -418,7 +425,6 @@ class WebServer(NetworkApplication):
 class Proxy(NetworkApplication):
     
     def __init__(self, args):
-        # self.cache = {}
         self.cache_dir = 'cache'
         if not os.path.exists(self.cache_dir):
             os.makedirs(self.cache_dir)
@@ -438,10 +444,9 @@ class Proxy(NetworkApplication):
             return
     
         print('Request received:')
-        # print(request)
-        # Parse hostname from client request
-        hostname = self.parse_hostname(request)
-        print('Parsed hostname: %s' % hostname)
+        # Extract hostname from client request
+        hostname = request.split('Host: ')[-1].split('\r\n')[0]
+        print(hostname)
 
         if not hostname:
             print('Could not parse hostname from request')
@@ -454,14 +459,9 @@ class Proxy(NetworkApplication):
         web_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         web_server_socket.connect(self.web_server_address)
         web_server_socket.sendall(request.encode('utf-8'))
-    
-        # Check cache for response
-        # if request in self.cache:
-        #     print('Serving response from cache')
-        #     response = self.cache[request]
-        # Generate cache key
+
         cache_key = (request + hostname).encode('utf-8')
-            
+   
         # Check cache for response
         cache_file = os.path.join(self.cache_dir, str(abs(hash(cache_key))))
         if os.path.exists(cache_file):
@@ -472,11 +472,7 @@ class Proxy(NetworkApplication):
             # Read response from web server
             response = web_server_socket.recv(8192)
             print('Received response from web server:')
-            # print(response)
-    
-            # Store response in cache
-            # self.cache[request] = response
-            # print('Storing response in cache')
+
             with open(cache_file, 'wb') as f:
                     f.write(response)
                     print('Storing response in cache')
@@ -488,18 +484,6 @@ class Proxy(NetworkApplication):
         client_socket.sendall(response)
         client_socket.close()
         
-    def parse_hostname(self, request):
-        try:
-            # Find start and end of Host header
-            start = request.index('Host:') + 6
-            end = request.index('\r\n', start)
-            
-            # Extract hostname from Host header
-            hostname = request[start:end].strip()
-            return hostname
-        except:
-            return None
-
     def start(self):
         print('Proxy server started.')
         try:
