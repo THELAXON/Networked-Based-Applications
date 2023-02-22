@@ -207,25 +207,6 @@ class ICMPPing(NetworkApplication):
             # Continue this process until stopped
             time.sleep(1)
 
-
-    def __init__(self, args):
-        print(f'Traceroute to: {args.hostname}...')
-        self.ID = random.randint(0, 65535)
-        max_ttl = 30
-        timeout = args.timeout
-        # Perform traceroute for each TTL value
-        for ttl in range(1, max_ttl + 1):
-            print(f'{ttl}\t', end='', flush=True)
-            addresses = []
-            # Perform three probes for each TTL value
-            for i in range(3):
-                delay, address, packetSize, ttlUsed, done = self.doOneTrace(args.hostname, timeout, ttl)
-                if delay is not None:
-                    addresses.append(delay)
-                if done:
-                    break
-           
-
 class Traceroute(NetworkApplication):
 
     def receiveOnePing(self, icmpSocket, timeout, ttl):
@@ -264,7 +245,7 @@ class Traceroute(NetworkApplication):
         packetSize = len(packet)
         ttlUsed = struct.unpack('I', ttl)[0]
         return packetSize, ttlUsed
-
+    
     def doOneTrace(self, dest_name, timeout, ttl):
         dest_addr = socket.gethostbyname(dest_name)
 
@@ -286,16 +267,10 @@ class Traceroute(NetworkApplication):
 
         # Call receiveOnePing function
         delay, address = self.receiveOnePing(icmpSocket, timeout, ttl)
-
         # Close ICMP socket
         icmpSocket.close()
 
-        # Check if the received packet has the same IP address as the destination
-        done = address == dest_addr
-
-        # Return the results
-        return delay, address, packetSize, ttlUsed, done
-
+        return delay, address, packetSize, ttlUsed
 
     def __init__(self, args):
         print(f'Traceroute to: {args.hostname}...')
@@ -305,19 +280,22 @@ class Traceroute(NetworkApplication):
         # Perform traceroute for each TTL value
         for ttl in range(1, max_ttl + 1):
             print(f'{ttl}\t', end='', flush=True)
+            done = False
             addresses = []
             # Perform three probes for each TTL value
             for i in range(3):
-                delay, address, packetSize, ttlUsed, done = self.doOneTrace(args.hostname, timeout, ttl)
+                delay, address, packetSize, ttlUsed = self.doOneTrace(args.hostname, timeout, ttl)
                 if delay is not None:
                     addresses.append(delay)
-                if done:
-                    break
-            if addresses:
-                print(f'{address}\t' + '\t'.join([f'{d*1000:.3f} ms' for d in addresses]))
+                    if address == args.hostname:
+                            done = True
+                            return address, addresses
             if done:
                 break
-        
+            # Print the IP address and delays for this TTL value
+            if addresses:
+                print(f'{address}\t' + '\t'.join([f'{d*1000:.3f} ms' for d in addresses]))
+                
 
 class ParisTraceroute(NetworkApplication):
     def receiveOnePing(self, icmpSocket, timeout, ttl):
@@ -438,6 +416,7 @@ class WebServer(NetworkApplication):
             serverSocket.close()
 
 class Proxy(NetworkApplication):
+    
     def __init__(self, args):
         # self.cache = {}
         self.cache_dir = 'cache'
@@ -445,70 +424,70 @@ class Proxy(NetworkApplication):
             os.makedirs(self.cache_dir)
         self.server_address = ('', args.port)
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind(self.server_address)
         self.server_socket.listen(1)
+        
         print('Starting proxy server on port %d' % args.port)
         self.start()
 
     def handle_client(self, client_socket):
-        try:
-            print('Handling client request')
-            request = client_socket.recv(1024).decode('utf-8')
-            if not request:
-                return
-            
-            hostname = self.parse_hostname(request)
-            if not hostname:
-                raise ValueError('Invalid request: missing Host header')
-            
-            self.web_server_address = (hostname, 80)
-            
-            # Generate cache key
-            cache_key = (request + hostname).encode('utf-8')
-            
-            # Check cache for response
-            cache_file = os.path.join(self.cache_dir, str(abs(hash(cache_key))))
-            if os.path.exists(cache_file):
-                print('Serving response from cache')
-                with open(cache_file, 'rb') as f:
-                    response = f.read()
-            else:
-                print('Fetching response from web server')
-                # Forward request to web server
-                web_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                web_server_socket.connect(self.web_server_address)
-                web_server_socket.sendall(request.encode('utf-8'))
-                
-                # Read response from web server
-                response = b''
-                try:
-                    while True:
-                        data = web_server_socket.recv(4096)
-                        if not data:
-                            break
-                        response += data
-                except socket.error as e:
-                    print('Failed to read response from web server:', e)
-                    client_socket.close()
-                    return
-                
-                # Store response in cache
-                with open(cache_file, 'wb') as f:
-                    f.write(response)
-                print('Storing response in cache')
-                
-                # Close web server socket
-                web_server_socket.close()
-            
-            # Send response to client
-            client_socket.sendall(response)
-            client_socket.close()
-            print('Client request completed')
-        except Exception as e:
-            print('Error handling client request:', str(e))
-            client_socket.close()
+        print('Handling client request')
+        request = client_socket.recv(1024).decode('utf-8')
+        
+        if not request:
+            return
+    
+        print('Request received:')
+        # print(request)
+        # Parse hostname from client request
+        hostname = self.parse_hostname(request)
+        print('Parsed hostname: %s' % hostname)
 
+        if not hostname:
+            print('Could not parse hostname from request')
+            return
+            
+        # Update web server address to use parsed hostname
+        self.web_server_address = (hostname, 80)
+            
+        # Forward request to web server
+        web_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        web_server_socket.connect(self.web_server_address)
+        web_server_socket.sendall(request.encode('utf-8'))
+    
+        # Check cache for response
+        # if request in self.cache:
+        #     print('Serving response from cache')
+        #     response = self.cache[request]
+        # Generate cache key
+        cache_key = (request + hostname).encode('utf-8')
+            
+        # Check cache for response
+        cache_file = os.path.join(self.cache_dir, str(abs(hash(cache_key))))
+        if os.path.exists(cache_file):
+            print('Serving response from cache')
+            with open(cache_file, 'rb') as f:
+                response = f.read()
+        else:
+            # Read response from web server
+            response = web_server_socket.recv(8192)
+            print('Received response from web server:')
+            # print(response)
+    
+            # Store response in cache
+            # self.cache[request] = response
+            # print('Storing response in cache')
+            with open(cache_file, 'wb') as f:
+                    f.write(response)
+                    print('Storing response in cache')
+            
+            # Close web server socket
+            web_server_socket.close()
+
+        # Send response to client
+        client_socket.sendall(response)
+        client_socket.close()
+        
     def parse_hostname(self, request):
         try:
             # Find start and end of Host header
@@ -520,9 +499,9 @@ class Proxy(NetworkApplication):
             return hostname
         except:
             return None
-    
+
     def start(self):
-        print('Proxy server started')
+        print('Proxy server started.')
         try:
             while True:
                 client_socket, client_address = self.server_socket.accept()
@@ -531,7 +510,6 @@ class Proxy(NetworkApplication):
             print('Proxy server stopped')
         finally:
             self.server_socket.close()
-
 
 if __name__ == "__main__":
     args = setupArgumentParser()
