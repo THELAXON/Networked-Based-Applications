@@ -207,6 +207,25 @@ class ICMPPing(NetworkApplication):
             # Continue this process until stopped
             time.sleep(1)
 
+
+    def __init__(self, args):
+        print(f'Traceroute to: {args.hostname}...')
+        self.ID = random.randint(0, 65535)
+        max_ttl = 30
+        timeout = args.timeout
+        # Perform traceroute for each TTL value
+        for ttl in range(1, max_ttl + 1):
+            print(f'{ttl}\t', end='', flush=True)
+            addresses = []
+            # Perform three probes for each TTL value
+            for i in range(3):
+                delay, address, packetSize, ttlUsed, done = self.doOneTrace(args.hostname, timeout, ttl)
+                if delay is not None:
+                    addresses.append(delay)
+                if done:
+                    break
+           
+
 class Traceroute(NetworkApplication):
 
     def receiveOnePing(self, icmpSocket, timeout, ttl):
