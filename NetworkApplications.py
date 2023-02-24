@@ -247,17 +247,18 @@ class Traceroute(NetworkApplication):
         self.printAdditionalDetails(packetLoss, minimumDelay, averageDelay, maximumDelay)           
 
 class ParisTraceroute(NetworkApplication):
-    def receiveOnePing(self, icmpSocket, timeout, ttl):
-        start = time.time()
+    
+    def receiveOnePing(self, icmpSocket, timeout, ttl):                                    # Handles the receiving part for packets
+        start = time.time()                                                                # Record the time as soon as it receivers      
         icmpSocket.settimeout(timeout)
         try:
-            data, address = icmpSocket.recvfrom(1024)
-            end = time.time()
-            delay = end - start
+            data, address = icmpSocket.recvfrom(1024)                                      # The response
+            end = time.time()                                                              # Records the end time
+            delay = end - start                                                            # Calculates the delay
             icmpHeader = data[20:28]                                                       # Unpack the packet header for useful information
             type, code, checksum, packet_ID, sequence = struct.unpack("bbHHh", icmpHeader)
             if packet_ID == self.ID and sequence == ttl:                                   # Checks that the ID and sequence number match between the request sent and  the reply
-                return delay, address[0]
+                return delay, address[0]                                                   
         except socket.timeout:
             return None, None                                                              # Try and Catch used for timeouts
         return delay, address[0]                                                           # Return the delay and address even if packet_ID and sequence number do not match
@@ -274,7 +275,7 @@ class ParisTraceroute(NetworkApplication):
         dest_addr = socket.gethostbyname(dest_name)
         icmp = socket.getprotobyname("icmp")                                               # Create ICMP socket
         try:
-            icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
+            icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)              # Using sock_raw
         except socket.error as errorCode:
             if errorCode.errno == 1:
                 raise socket.error("ICMP messages can only be sent from processes running as root.(Use Sudo)")  # Lets the user know to run in admin privaleges
@@ -283,68 +284,68 @@ class ParisTraceroute(NetworkApplication):
         icmpSocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, struct.pack('I', ttl))      # Set the TTL for the socket
         ttlUsed = self.sendOnePing(icmpSocket, dest_addr, ttl)                              # Call sendOnePing function
         delay, address = self.receiveOnePing(icmpSocket, timeout, ttl)                      # Call receiveOnePing function
-        icmpSocket.close()
+        icmpSocket.close()                                                                  # Close socket after everything is finished
         
         done = address == dest_addr                                                         # Check if the received packet has the same IP address as the destination
 
         return delay, address, ttlUsed, done                                                # Return the results
 
     def makepacket(self):
-        header = struct.pack("bbHHh", 8, 0, 0, self.ID, 1)
-        payload = b"abcdefghijklmnopqrstuvwxyz"
-        packet = header + payload
-        myChecksum = self.checksum(packet)                                                 # Compute the checksum
-        header = struct.pack("bbHHh", 8, 0, myChecksum, self.ID, 1)
-        packet = header + payload
-        return packet
+        header = struct.pack("bbHHh", 8, 0, 0, self.ID, 1)                                  # Creates the header of the packet
+        payload = b"abcdefghijklmnopqrstuvwxyz"                                             # Payload can be anything
+        packet = header + payload                                                           # Concatonates the header and payload
+        myChecksum = self.checksum(packet)                                                  # Compute the checksum
+        header = struct.pack("bbHHh", 8, 0, myChecksum, self.ID, 1)                         # Redo the header
+        packet = header + payload                                                           # Concatonate again
+        return packet                                                                       # Return the packet
 
     def __init__(self, args):
         print(f'Traceroute to: {args.hostname}...')
-        self.ID = random.randint(0, 65535)
-        max_ttl = 30
-        timeout = args.timeout
-        delays = []
+        self.ID = random.randint(0, 65535)                                                  # Generate a random ID
+        max_ttl = 30                                                                        # Hardcode max ttl as 30 as its the general max ttl
+        timeout = args.timeout                                                              # Can set a timeout but its default to 4 in argparse
+        delays = []                                                                         # Array to store the delay times
         for ttl in range(1, max_ttl + 1):                                                   # Perform traceroute for each TTL value
             print(f'{ttl}\t', end='', flush=True)
             addresses = []
             for i in range(3):                                                              # Perform three probes for each TTL value
-                delay, address, ttlUsed, done = self.doOneTrace(args.hostname, timeout, ttl)
+                delay, address, ttlUsed, done = self.doOneTrace(args.hostname, timeout, ttl)# doOneTrace is called
                 if delay is not None:
-                    addresses.append(delay*1000)
+                    addresses.append(delay*1000)                                            # If there is a delay it should be multiplied by a 1000 to represent in ms
             if addresses:
-                self.printMultipleResults(ttl, address, addresses)
-                delays.extend(addresses)
+                self.printMultipleResults(ttl, address, addresses)                          # Use the printmultipleresults function inherited from network applications
+                delays.extend(addresses)                                                    # Add the time into delays
             if done:
                 break
-        packetLoss = (1 - (len(delays) / (max_ttl * 3))) * 100 if max_ttl * 3 > 0 else 0.0
-        minimumDelay = min(delays) if delays else 0.0
-        averageDelay = sum(delays) / len(delays) if delays else 0.0
-        maximumDelay = max(delays) if delays else 0.0
-        self.printAdditionalDetails(packetLoss, minimumDelay, averageDelay, maximumDelay)
+        packetLoss = (1 - (len(delays) / (max_ttl * 3))) * 100 if max_ttl * 3 > 0 else 0.0  # Calculates packetloss
+        minimumDelay = min(delays) if delays else 0.0                                       # Calculates minimum delay
+        averageDelay = sum(delays) / len(delays) if delays else 0.0                         # Calulates average delay
+        maximumDelay = max(delays) if delays else 0.0                                       # Calculates the maximum delay
+        self.printAdditionalDetails(packetLoss, minimumDelay, averageDelay, maximumDelay)   # Prints use the printadditionaldetails function in network applications class
     
 
 
 class WebServer(NetworkApplication):
     
     def handleRequest(self, tcpSocket):
-        request = tcpSocket.recv(1024).decode('utf-8')
-        path = request.split(' ')[1]
+        request = tcpSocket.recv(1024).decode('utf-8')                                      # Takes the request
+        path = request.split(' ')[1]                                                        # Splits the request to get file path
         
         try:
-            with open(path[1:], 'rb') as file:
-                content = file.read()
-                response = 'HTTP/1.1 200 OK\r\n\r\n' + content.decode('utf-8')
+            with open(path[1:], 'rb') as file:                                              # Opens file path
+                content = file.read()                                                       # Reads content
+                response = 'HTTP/1.1 200 OK\r\n\r\n' + content.decode('utf-8')              # Decodes the content
         except:
-            response = 'HTTP/1.1 404 Not Found\r\n\r\nFile Not Found'
+            response = 'HTTP/1.1 404 Not Found\r\n\r\nFile Not Found'                       # if it cant find path it gives a 404 file not found error
         
-        tcpSocket.sendall(response.encode('utf-8'))
-        tcpSocket.close()
+        tcpSocket.sendall(response.encode('utf-8'))                                         # Shows response
+        tcpSocket.close()                                                                   # Closes socket
 
     def __init__(self, args):
         print('Web Server starting on port: %i...' % (args.port))
-        serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        serverSocket.bind(('', args.port))
-        serverSocket.listen(1)
+        serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)                    # Makes a socket
+        serverSocket.bind(('', args.port))                                                  # Binds port number to server socket
+        serverSocket.listen(1)                                                              # Listens for the port
 
         try:
             while True:
@@ -370,11 +371,11 @@ class Proxy(NetworkApplication):
 
     def handle_client(self, client_socket):
         print('Handling client request')
-        request = client_socket.recv(1024).decode('utf-8')
+        request = client_socket.recv(1024).decode('utf-8')                           # Takes the request
         if not request:
             return
         print('Request received:')
-        print(request)
+        print(request)                                                               # Prints the request
         hostname = request.split('Host: ')[-1].split('\r\n')[0]                      # Extract hostname from client request
         print(hostname)
         if not hostname:
